@@ -6,13 +6,18 @@
     <title>Business Partner Payout Calculator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: ONIC Brand Colors -->
-    <!-- Application Structure Plan: The application is designed as a task-oriented dashboard. The primary user task is to calculate potential earnings. The layout is a two-part grid: Inputs on the left, and Outputs on the right. This allows users to immediately see the result of their changes. Below this main tool, supplementary charts provide visual context for the commission tiers. This structure prioritizes the user's primary goal (calculation) while still offering the necessary explanatory details, making it highly efficient and user-friendly. -->
-    <!-- Visualization & Content Choices: TVA & QoS Tiers: Goal is to compare. Bar charts (Chart.js/Canvas) are used to visually distinguish bonus vs. deduction tiers. The active tier is highlighted based on slider input, creating a direct visual link between action and consequence. Payout Logic: Goal is to organize and engage. An interactive calculator (HTML/JS) is the core of the app. It translates complex business rules into a simple, hands-on tool. MNP Payout: Goal is to inform. The output is dynamically shown or hidden based on the 100% target condition, clearly communicating this critical rule. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <!-- 
+    Application Structure Plan: The application is designed as a task-oriented dashboard. The primary user task is to calculate potential earnings. The layout is a two-part grid: Inputs on the left, and Outputs on the right. This allows users to immediately see the result of their changes. Below this main tool, supplementary charts provide visual context for the commission tiers. This structure prioritizes the user's primary goal (calculation) while still offering the necessary explanatory details, making it highly efficient and user-friendly.
+    Visualization & Content Choices: 
+    - TVA & QoS Tiers: Bar charts (Chart.js) are used to visually distinguish bonus vs. deduction tiers. The active tier is highlighted based on slider input, creating a direct visual link between action and consequence.
+    - Payout Logic: An interactive calculator (HTML/JS) is the core of the app. It translates complex business rules into a simple, hands-on tool.
+    - MNP Payout: The output is dynamically shown or hidden based on the 100% target condition, clearly communicating this critical rule.
+    - What-If Analysis: Line charts (Plotly.js) and data tables are used to show the relationship between multiple variables (TVA%, QoS%, and Earnings), providing deeper strategic insights.
+    -->
     <style>
         :root {
             --onic-purple: #5F259F;
@@ -23,12 +28,32 @@
         body { font-family: 'Inter', sans-serif; background-color: var(--onic-light-gray); }
         .chart-container { position: relative; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; }
         @media (min-width: 768px) { .chart-container { height: 400px; } }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: var(--onic-purple); cursor: pointer; border-radius: 50%; margin-top: -8px;}
-        input[type=range]::-moz-range-thumb { width: 20px; height: 20px; background: var(--onic-purple); cursor: pointer; border-radius: 50%; }
         .input-group { background-color: white; padding: 1.5rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
-        .input-sync-group { display: flex; align-items: center; gap: 1rem; }
+        .input-sync-group { position: relative; display: flex; align-items: center; gap: 1rem; }
         .input-sync-group input[type=range] { flex-grow: 1; }
         .input-sync-group input[type=number] { width: 5rem; text-align: right; }
+        .slider-tooltip {
+            position: absolute;
+            top: -2.5rem;
+            transform: translateX(-50%);
+            background-color: var(--onic-purple);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            display: none;
+            white-space: nowrap;
+        }
+        .input-with-percent { position: relative; }
+        .input-with-percent span { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: #9ca3af; }
+        .input-with-percent input { padding-right: 2.25rem; }
+        .content-locked {
+            opacity: 0.4;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+            filter: blur(2px);
+        }
     </style>
 </head>
 <body class="bg-slate-100">
@@ -40,202 +65,253 @@
             <p class="mt-2 text-lg text-slate-600">Estimate your earnings based on your performance.</p>
         </header>
 
-        <main class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            
-            <!-- Left Column: Inputs -->
-            <div class="lg:col-span-3 space-y-6">
-                <!-- Targets Input Group -->
-                <div class="input-group">
-                    <h2 class="text-xl font-bold text-slate-700 mb-4 border-b pb-2">Your Targets</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
-                        <div>
-                            <label for="target-main" class="block text-sm font-medium text-slate-700">Overall Activation Target</label>
-                            <input type="number" id="target-main" value="200" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
-                        </div>
-                        <div></div>
-                        <div>
-                            <label for="target-mnp-a-perc" class="block text-sm font-medium text-slate-700">MNP Target (A) % of Overall</label>
-                            <input type="number" id="target-mnp-a-perc" value="10" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
-                        </div>
-                        <div class="bg-slate-50 p-2 rounded-lg text-center">
-                            <p class="text-sm text-slate-500">Abs. Target (A)</p>
-                            <p id="abs-target-mnp-a" class="font-bold text-slate-800">0</p>
-                        </div>
-                        <div>
-                            <label for="target-mnp-b-perc" class="block text-sm font-medium text-slate-700">MNP Target (B) % of Overall</label>
-                            <input type="number" id="target-mnp-b-perc" value="5" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
-                        </div>
-                         <div class="bg-slate-50 p-2 rounded-lg text-center">
-                            <p class="text-sm text-slate-500">Abs. Target (B)</p>
-                            <p id="abs-target-mnp-b" class="font-bold text-slate-800">0</p>
-                        </div>
-                        <div>
-                            <label for="target-mnp-c-perc" class="block text-sm font-medium text-slate-700">MNP Target (C) % of Overall</label>
-                            <input type="number" id="target-mnp-c-perc" value="5" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
-                        </div>
-                         <div class="bg-slate-50 p-2 rounded-lg text-center">
-                            <p class="text-sm text-slate-500">Abs. Target (C)</p>
-                            <p id="abs-target-mnp-c" class="font-bold text-slate-800">0</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Achievements Input Group -->
-                <div class="input-group">
-                    <h2 class="text-xl font-bold text-slate-700 mb-4 border-b pb-2">Your Achievements</h2>
-                    <div class="space-y-6">
-                        <div>
-                            <label for="province" class="block text-sm font-medium text-slate-700">Province (for Tax Calculation)</label>
-                            <select id="province" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
-                                <option value="punjab">Punjab</option>
-                                <option value="kpk">KPK</option>
-                                <option value="sindh">Sindh</option>
-                                <option value="balochistan">Balochistan</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="achieved-tva-perc" class="block text-sm font-medium text-slate-700 mb-1">TVA Achievement %</label>
-                            <div class="input-sync-group">
-                                <input type="range" id="achieved-tva-perc" min="0" max="200" value="75" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-                                <input type="number" id="achieved-tva-perc-num" min="0" max="200" value="75" class="p-2 rounded-md border-slate-300 shadow-sm">
-                            </div>
-                        </div>
-                        <div>
-                            <label for="achieved-qos-overall" class="block text-sm font-medium text-slate-700 mb-1">Overall QoS %</label>
-                            <div class="input-sync-group">
-                                <input type="range" id="achieved-qos-overall" min="0" max="100" value="45" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-                                <input type="number" id="achieved-qos-overall-num" min="0" max="100" value="45" class="p-2 rounded-md border-slate-300 shadow-sm">
-                            </div>
-                        </div>
-                        <div>
-                             <label for="achieved-qos-specific" class="block text-sm font-medium text-slate-700 mb-1">QoS % (w/o other plans)</label>
-                            <div class="input-sync-group">
-                                <input type="range" id="achieved-qos-specific" min="0" max="100" value="35" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-                                <input type="number" id="achieved-qos-specific-num" min="0" max="100" value="35" class="p-2 rounded-md border-slate-300 shadow-sm">
-                            </div>
-                        </div>
-                        <div class="pt-4 border-t">
-                             <label for="achieved-mnp-abs" class="block text-sm font-medium text-slate-700">MNP Achieved (without Ufone)</label>
-                             <input type="number" id="achieved-mnp-abs" value="15" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
-                             <div id="mnp-status-feedback" class="mt-2 text-sm text-center p-3 rounded-lg" style="background-color: #f3e9fd;"></div>
-                        </div>
-                    </div>
-                </div>
-                 <!-- Absolute Numbers Display -->
-                <div class="input-group">
-                    <h2 class="text-xl font-bold text-slate-700 mb-4 border-b pb-2">Calculated Absolute Numbers</h2>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div class="bg-slate-50 p-3 rounded-lg">
-                            <p class="text-sm text-slate-500">Activations</p>
-                            <p id="abs-total-activations" class="text-2xl font-bold text-slate-800">0</p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg">
-                            <p class="text-sm text-slate-500">Overall QoS</p>
-                            <p id="abs-qos-overall" class="text-2xl font-bold text-slate-800">0</p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg">
-                            <p class="text-sm text-slate-500">Specific QoS</p>
-                            <p id="abs-qos-specific" class="text-2xl font-bold text-slate-800">0</p>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-lg">
-                            <p class="text-sm text-slate-500">MNP Achieved</p>
-                            <p id="abs-mnp-ach" class="text-2xl font-bold text-slate-800">0</p>
-                        </div>
-                    </div>
-                </div>
+        <!-- Province Selection Gate -->
+        <div id="province-gate" class="input-group mb-8 text-center">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Select Your Province to Begin</h2>
+            <p class="text-slate-600 mb-4">Province selection is required for accurate tax calculations.</p>
+            <div class="max-w-md mx-auto">
+                <select id="province" class="block w-full rounded-md border-slate-300 shadow-sm p-3 text-lg">
+                    <option value="" disabled selected>-- Select Province --</option>
+                    <option value="punjab">Punjab</option>
+                    <option value="kpk">KPK</option>
+                    <option value="sindh">Sindh</option>
+                    <option value="balochistan">Balochistan</option>
+                </select>
             </div>
+        </div>
 
-            <!-- Right Column: Outputs -->
-            <div class="lg:col-span-2">
-                <div class="text-white rounded-xl shadow-lg p-6 sticky top-8" style="background-color: var(--onic-dark);">
-                    <h2 class="text-xl font-bold mb-4 border-b border-slate-600 pb-2">Payout & Tax Breakdown</h2>
-                    <div class="space-y-2 text-sm">
-                        <div class="flex justify-between items-center">
-                            <span class="text-slate-300">MTS-S Rent</span>
-                            <span id="output-mts-rent" class="font-semibold">PKR 0</span>
+        <div id="main-content" class="content-locked">
+            <main class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                
+                <!-- Left Column: Inputs -->
+                <div class="lg:col-span-3 space-y-6">
+                    <!-- Targets Input Group -->
+                    <div class="input-group">
+                        <h2 class="text-xl font-bold text-slate-700 mb-4 border-b pb-2">Your Targets</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+                            <div>
+                                <label for="target-main" class="block text-sm font-medium text-slate-700">Overall Activation Target</label>
+                                <input type="number" id="target-main" placeholder="e.g., 200" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
+                            </div>
+                            <div></div>
+                            <div class="input-with-percent">
+                                <label for="target-mnp-a-perc" class="block text-sm font-medium text-slate-700">MNP Target (A)</label>
+                                <input type="number" id="target-mnp-a-perc" placeholder="10" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
+                                <span>%</span>
+                            </div>
+                            <div class="bg-slate-50 p-2 rounded-lg text-center">
+                                <p class="text-sm text-slate-500">Abs. Target (A)</p>
+                                <p id="abs-target-mnp-a" class="font-bold text-slate-800">0</p>
+                            </div>
+                            <div class="input-with-percent">
+                                <label for="target-mnp-b-perc" class="block text-sm font-medium text-slate-700">MNP Target (B)</label>
+                                <input type="number" id="target-mnp-b-perc" placeholder="15" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
+                                 <span>%</span>
+                            </div>
+                             <div class="bg-slate-50 p-2 rounded-lg text-center">
+                                <p class="text-sm text-slate-500">Abs. Target (B)</p>
+                                <p id="abs-target-mnp-b" class="font-bold text-slate-800">0</p>
+                            </div>
+                            <div class="input-with-percent">
+                                <label for="target-mnp-c-perc" class="block text-sm font-medium text-slate-700">MNP Target (C)</label>
+                                <input type="number" id="target-mnp-c-perc" placeholder="20" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
+                                 <span>%</span>
+                            </div>
+                             <div class="bg-slate-50 p-2 rounded-lg text-center">
+                                <p class="text-sm text-slate-500">Abs. Target (C)</p>
+                                <p id="abs-target-mnp-c" class="font-bold text-slate-800">0</p>
+                            </div>
                         </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-slate-300">Per SIM Payout</span>
-                            <span id="output-per-sim" class="font-semibold">PKR 0</span>
+                        <!-- MNP Validation Message Area -->
+                        <div id="mnp-target-error" class="hidden text-red-600 text-sm mt-4 p-3 bg-red-50 rounded-lg"></div>
+                    </div>
+
+                    <!-- Achievements Input Group -->
+                    <div class="input-group">
+                        <h2 class="text-xl font-bold text-slate-700 mb-1 border-b pb-2">Your Achievements</h2>
+                        <p class="text-xs text-slate-500 mb-4 italic">Default values are set for a high-performance scenario. Please adjust the sliders to match your projections.</p>
+                        <div class="space-y-6">
+                            <div>
+                                <label for="achieved-tva-perc" class="block text-sm font-medium text-slate-700 mb-1">TVA Achievement %</label>
+                                <div class="input-sync-group">
+                                    <div class="slider-tooltip"></div>
+                                    <input type="range" id="achieved-tva-perc" min="0" max="200" value="115" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                                    <input type="number" id="achieved-tva-perc-num" min="0" max="200" value="115" class="p-2 rounded-md border-slate-300 shadow-sm">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="achieved-qos-overall" class="block text-sm font-medium text-slate-700 mb-1">Overall QoS %</label>
+                                <div class="input-sync-group">
+                                     <div class="slider-tooltip"></div>
+                                    <input type="range" id="achieved-qos-overall" min="0" max="100" value="55" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                                    <input type="number" id="achieved-qos-overall-num" min="0" max="100" value="55" class="p-2 rounded-md border-slate-300 shadow-sm">
+                                </div>
+                            </div>
+                            <div>
+                                 <label for="achieved-qos-specific" class="block text-sm font-medium text-slate-700 mb-1">QoS % (w/o other plans)</label>
+                                <div class="input-sync-group">
+                                     <div class="slider-tooltip"></div>
+                                    <input type="range" id="achieved-qos-specific" min="0" max="100" value="45" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                                    <input type="number" id="achieved-qos-specific-num" min="0" max="100" value="45" class="p-2 rounded-md border-slate-300 shadow-sm">
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t">
+                                 <label for="achieved-mnp-abs" class="block text-sm font-medium text-slate-700">MNP Achieved (without Ufone)</label>
+                                 <p class="text-xs text-slate-500 mb-1">Enter your projected MNP numbers. This is optional.</p>
+                                 <input type="number" id="achieved-mnp-abs" placeholder="e.g. 50" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2">
+                                 <div id="mnp-status-feedback" class="mt-2 text-sm text-center p-3 rounded-lg" style="background-color: #f3e9fd;"></div>
+                            </div>
+                            
+                            <div class="mt-6 pt-4 border-t">
+                                <h3 class="text-md font-semibold text-slate-600 mb-2">Calculated Absolute Achievements</h3>
+                                <div class="grid grid-cols-2 gap-2 text-sm">
+                                    <div class="bg-slate-50 p-2 rounded-lg">
+                                        <p class="text-slate-500">Total Activations</p>
+                                        <p id="abs-total-activations" class="font-bold text-slate-800">0</p>
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded-lg">
+                                        <p class="text-slate-500">MNP Achieved</p>
+                                        <p id="abs-mnp-ach" class="font-bold text-slate-800">0</p>
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded-lg">
+                                        <p class="text-slate-500">QoS Overall (Abs)</p>
+                                        <p id="abs-qos-overall" class="font-bold text-slate-800">0</p>
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded-lg">
+                                        <p class="text-slate-500">QoS Specific (Abs)</p>
+                                        <p id="abs-qos-specific" class="font-bold text-slate-800">0</p>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-slate-300">TVA Payout (<span id="output-tva-perc" class="text-xs">0%</span>)</span>
-                            <span id="output-tva" class="font-semibold">PKR 0</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-slate-300">QoS Payout</span>
-                            <span id="output-qos" class="font-semibold">PKR 0</span>
-                        </div>
-                        <div class="flex justify-between items-center pb-2">
-                            <span class="text-slate-300">MNP Payout (Top Slab)</span>
-                            <span id="output-mnp" class="font-semibold">PKR 0</span>
-                        </div>
-                        <p id="mnp-condition-msg" class="text-xs text-amber-400 text-center hidden">MNP payout requires 100% of overall target.</p>
-                        
-                        <div class="border-t border-slate-600 !mt-3 pt-3 space-y-2">
-                             <div class="flex justify-between items-center font-bold text-base">
-                                <span class="text-slate-200">Net Payout</span>
-                                <span id="output-net-payout" class="text-slate-100">PKR 0</span>
+                    </div>
+                     <!-- Shoutout Display -->
+                    <div id="shoutout-section" class="input-group text-center" style="background-color: var(--onic-purple); color: white;">
+                    </div>
+                </div>
+
+                <!-- Right Column: Outputs -->
+                <div class="lg:col-span-2">
+                    <div id="output-container" class="text-white rounded-xl shadow-lg p-6 sticky top-8" style="background-color: var(--onic-dark);">
+                        <h2 class="text-xl font-bold mb-4 border-b border-slate-600 pb-2">Payout & Tax Breakdown</h2>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300">MTS-S Rent</span>
+                                <span id="output-mts-rent" class="font-semibold">PKR 0</span>
                             </div>
                             <div class="flex justify-between items-center">
-                                <span id="label-gst" class="text-slate-300">GST</span>
-                                <span id="output-gst" class="font-semibold">PKR 0</span>
+                                <span class="text-slate-300">Per SIM Payout</span>
+                                <span id="output-per-sim" class="font-semibold">PKR 0</span>
                             </div>
-                             <div class="flex justify-between items-center font-bold text-base pb-2">
-                                <span class="text-slate-200">Total Payout</span>
-                                <span id="output-total-payout" class="text-slate-100">PKR 0</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300">TVA Payout (<span id="output-tva-perc" class="text-xs">0%</span>)</span>
+                                <span id="output-tva" class="font-semibold">PKR 0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300">QoS Payout</span>
+                                <span id="output-qos" class="font-semibold">PKR 0</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-2">
+                                <span class="text-slate-300">MNP Payout (Top Slab)</span>
+                                <span id="output-mnp" class="font-semibold">PKR 0</span>
+                            </div>
+                            <p id="mnp-condition-msg" class="text-xs text-amber-400 text-center hidden">MNP payout requires 100% of overall target.</p>
+                            
+                            <div class="border-t border-slate-600 !mt-3 pt-3 space-y-2">
+                                 <div class="flex justify-between items-center font-bold text-base">
+                                     <span class="text-slate-200">Net Payout</span>
+                                     <span id="output-net-payout" class="text-slate-100">PKR 0</span>
+                                 </div>
+                                <div class="flex justify-between items-center">
+                                     <span id="label-gst" class="text-slate-300">GST</span>
+                                     <span id="output-gst" class="font-semibold">PKR 0</span>
+                                 </div>
+                                 <div class="flex justify-between items-center font-bold text-base pb-2">
+                                     <span class="text-slate-200">Total Payout</span>
+                                     <span id="output-total-payout" class="text-slate-100">PKR 0</span>
+                                 </div>
+                            </div>
+
+                             <div class="border-t border-slate-600 !mt-3 pt-3 space-y-2">
+                                 <div class="flex justify-between items-center">
+                                     <span class="text-slate-300">Income Tax Withheld (12%)</span>
+                                     <span id="output-income-tax" class="font-semibold text-red-400">(PKR 0)</span>
+                                 </div>
+                                 <div class="flex justify-between items-center">
+                                     <span id="label-gst-withheld" class="text-slate-300">GST Withheld</span>
+                                     <span id="output-gst-withheld" class="font-semibold text-red-400">(PKR 0)</span>
+                                 </div>
+                                 <div class="flex justify-between items-center mt-1 p-2 rounded-md bg-sky-900">
+                                     <span id="label-gst-payable" class="text-sky-300">Your GST Liability (Payable to RTA)</span>
+                                     <span id="output-gst-payable" class="font-semibold text-sky-300">PKR 0</span>
+                                 </div>
+                            </div>
+                            
+                            <div class="border-t border-slate-600 !mt-3 pt-3 space-y-3">
+                                <div class="flex justify-between items-center text-xl">
+                                    <span class="font-bold">Amount Credited</span>
+                                    <span id="output-final-credited" class="font-extrabold" style="color: var(--onic-accent-pink);">PKR 0</span>
+                                </div>
+                                 <div class="flex justify-between items-center text-base">
+                                     <span class="text-slate-300">Pure Partner Earning</span>
+                                     <span id="output-pure-earning" class="font-semibold text-sky-400">PKR 0</span>
+                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </main>
 
-                         <div class="border-t border-slate-600 !mt-3 pt-3 space-y-2">
-                             <div class="flex justify-between items-center">
-                                <span class="text-slate-300">Income Tax Withheld (12%)</span>
-                                <span id="output-income-tax" class="font-semibold text-red-400">(PKR 0)</span>
-                            </div>
-                             <div class="flex justify-between items-center">
-                                <span id="label-gst-withheld" class="text-slate-300">GST Withheld</span>
-                                <span id="output-gst-withheld" class="font-semibold text-red-400">(PKR 0)</span>
-                            </div>
-                         </div>
-                        
-                        <div class="border-t border-slate-600 !mt-3 pt-3 space-y-3">
-                            <div class="flex justify-between items-center text-xl">
-                                <span class="font-bold">Amount Credited</span>
-                                <span id="output-final-credited" class="font-extrabold" style="color: var(--onic-accent-pink);">PKR 0</span>
-                            </div>
-                             <div class="flex justify-between items-center text-base">
-                                <span class="text-slate-300">Pure Partner Earning</span>
-                                <span id="output-pure-earning" class="font-semibold text-sky-400">PKR 0</span>
-                            </div>
+            <!-- Visualizations Section -->
+            <section class="mt-12">
+                 <h2 class="text-2xl font-bold text-center mb-1" style="color: var(--onic-dark);">Commission Tier Visualizer</h2>
+                 <p class="text-slate-500 text-center mb-8">Your achievement level determines the payout slab. See how it works below.</p>
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                         <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">TVA Payout Slabs</h3>
+                        <div class="chart-container">
+                            <canvas id="tvaChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">QoS Payout Slabs</h3>
+                        <div class="chart-container">
+                            <canvas id="qosChart"></canvas>
                         </div>
                     </div>
                 </div>
-            </div>
-        </main>
-
-        <!-- Visualizations Section -->
-        <section class="mt-12">
-             <h2 class="text-2xl font-bold text-center mb-1" style="color: var(--onic-dark);">Commission Tier Visualizer</h2>
-             <p class="text-slate-500 text-center mb-8">Your achievement level determines the payout slab. See how it works below.</p>
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                     <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">TVA Payout Slabs</h3>
-                    <div class="chart-container">
-                        <canvas id="tvaChart"></canvas>
+            </section>
+            
+            <!-- What If Analysis -->
+            <section class="mt-12">
+                <h2 class="text-2xl font-bold text-center mb-1" style="color: var(--onic-dark);">What-If Analysis: Earning Potential</h2>
+                <p class="text-slate-500 text-center mb-8">See how "Pure Partner Earning" changes with TVA and QoS achievements for each MNP slab.</p>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="input-group">
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">Analysis for MNP Slab A</h3>
+                        <div id="whatif-chart-a"></div>
+                        <div id="whatif-table-a" class="mt-4"></div>
+                    </div>
+                    <div class="input-group">
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">Analysis for MNP Slab B</h3>
+                        <div id="whatif-chart-b"></div>
+                        <div id="whatif-table-b" class="mt-4"></div>
+                    </div>
+                    <div class="input-group">
+                        <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">Analysis for MNP Slab C</h3>
+                        <div id="whatif-chart-c"></div>
+                        <div id="whatif-table-c" class="mt-4"></div>
                     </div>
                 </div>
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                    <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">QoS Payout Slabs</h3>
-                    <div class="chart-container">
-                        <canvas id="qosChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </section>
+            </section>
+        </div>
 
     </div>
 
     <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- CONFIGURATION & CONSTANTS ---
         const tvaTiers = [
             { threshold: 115, value: 400, label: '115%+' }, { threshold: 110, value: 300, label: '110-115%' },
             { threshold: 100, value: 200, label: '100-110%' }, { threshold: 90, value: 0, label: '90-100%' },
@@ -248,12 +324,16 @@
             { threshold: 0, value: -300, label: '< 30%' }
         ];
 
+        // --- DOM ELEMENT REFERENCES ---
+        const provinceGate = document.getElementById('province-gate');
+        const mainContent = document.getElementById('main-content');
+        
         const inputs = {
+            province: document.getElementById('province'),
             targetMain: document.getElementById('target-main'),
             targetMnpAPerc: document.getElementById('target-mnp-a-perc'),
             targetMnpBPerc: document.getElementById('target-mnp-b-perc'),
             targetMnpCPerc: document.getElementById('target-mnp-c-perc'),
-            province: document.getElementById('province'),
             achievedTvaPerc: document.getElementById('achieved-tva-perc'),
             achievedTvaPercNum: document.getElementById('achieved-tva-perc-num'),
             achievedQosOverall: document.getElementById('achieved-qos-overall'),
@@ -264,6 +344,7 @@
         };
 
         const outputs = {
+            outputContainer: document.getElementById('output-container'),
             mtsRent: document.getElementById('output-mts-rent'),
             perSim: document.getElementById('output-per-sim'),
             tva: document.getElementById('output-tva'),
@@ -275,6 +356,7 @@
             totalPayout: document.getElementById('output-total-payout'),
             incomeTax: document.getElementById('output-income-tax'),
             gstWithheld: document.getElementById('output-gst-withheld'),
+            gstPayable: document.getElementById('output-gst-payable'),
             finalCredited: document.getElementById('output-final-credited'),
             pureEarning: document.getElementById('output-pure-earning'),
             mnpMsg: document.getElementById('mnp-condition-msg'),
@@ -284,6 +366,9 @@
             absTargetMnpC: document.getElementById('abs-target-mnp-c'),
             labelGst: document.getElementById('label-gst'),
             labelGstWithheld: document.getElementById('label-gst-withheld'),
+            labelGstPayable: document.getElementById('label-gst-payable'),
+            shoutoutSection: document.getElementById('shoutout-section'),
+            mnpTargetError: document.getElementById('mnp-target-error'),
         };
         
         const absOutputs = {
@@ -293,124 +378,152 @@
             mnpAch: document.getElementById('abs-mnp-ach'),
         };
 
+        // --- UTILITY FUNCTIONS ---
         const formatCurrency = (value) => `PKR ${Math.round(value).toLocaleString()}`;
-        const formatNegativeCurrency = (value) => `(PKR ${Math.round(value).toLocaleString()})`;
+        const formatNegativeCurrency = (value) => `(PKR ${Math.round(Math.abs(value)).toLocaleString()})`;
 
+        // --- VALIDATION LOGIC ---
+        function validateMnpTargets() {
+            const valA = parseInt(inputs.targetMnpAPerc.value) || 0;
+            const valB = parseInt(inputs.targetMnpBPerc.value) || 0;
+            const valC = parseInt(inputs.targetMnpCPerc.value) || 0;
+
+            if (valB > 0 && valB < valA) {
+                outputs.mnpTargetError.textContent = 'Caution: Slab B target must be greater than or equal to Slab A.';
+                outputs.mnpTargetError.classList.remove('hidden');
+                return false;
+            }
+            if (valC > 0 && valC < valB) {
+                outputs.mnpTargetError.textContent = 'Caution: Slab C target must be greater than or equal to Slab B.';
+                outputs.mnpTargetError.classList.remove('hidden');
+                return false;
+            }
+            if ((valA > 0 && valA < 10) || valC > 35) {
+                 outputs.mnpTargetError.textContent = 'Caution: Please re-check your MNP Slabs. It seems you have inserted a value outside the valid range.';
+                 outputs.mnpTargetError.classList.remove('hidden');
+                 return false;
+            }
+
+            outputs.mnpTargetError.classList.add('hidden');
+            return true;
+        }
+
+        // --- CORE CALCULATION LOGIC ---
         function calculatePayout() {
+            // 1. Validate inputs first
+            if (!validateMnpTargets() || !inputs.province.value) {
+                outputs.outputContainer.classList.add('disabled');
+                return; // Stop calculation if validation fails or province not selected
+            }
+            outputs.outputContainer.classList.remove('disabled');
+
+            // 2. Get all input values
             const targetMain = parseInt(inputs.targetMain.value) || 0;
             const targetMnpAPerc = parseInt(inputs.targetMnpAPerc.value) || 0;
             const targetMnpBPerc = parseInt(inputs.targetMnpBPerc.value) || 0;
             const targetMnpCPerc = parseInt(inputs.targetMnpCPerc.value) || 0;
             const province = inputs.province.value;
-
-            const tvaPercentage = parseInt(inputs.achievedTvaPerc.value);
-            const qosOverallPerc = parseInt(inputs.achievedQosOverall.value);
-            const qosSpecificPerc = parseInt(inputs.achievedQosSpecific.value);
+            const tvaPercentage = parseInt(inputs.achievedTvaPerc.value) || 0;
+            const qosOverallPerc = parseInt(inputs.achievedQosOverall.value) || 0;
+            const qosSpecificPerc = parseInt(inputs.achievedQosSpecific.value) || 0;
             const achievedMnpAbs = parseInt(inputs.achievedMnpAbs.value) || 0;
             
+            // 3. Calculate base values
             const achievedTva = Math.round((tvaPercentage / 100) * targetMain);
-
-            outputs.tvaPerc.textContent = `${tvaPercentage.toFixed(1)}%`;
-
             let mtsRentPayout = achievedTva * 450;
             let perSimPayout = achievedTva * 700;
             
+            // 4. Calculate TVA Payout/Deduction
             let tvaPayout = 0;
             const currentTvaTier = tvaTiers.find(t => tvaPercentage >= t.threshold);
             if (currentTvaTier) {
-                if (currentTvaTier.value >= 0) {
-                    tvaPayout = currentTvaTier.value * achievedTva;
-                } else {
-                    const deficit = targetMain - achievedTva;
-                    tvaPayout = deficit > 0 ? deficit * currentTvaTier.value : 0;
-                }
+                if (currentTvaTier.value >= 0) { tvaPayout = currentTvaTier.value * achievedTva; } 
+                else { const deficit = targetMain - achievedTva; tvaPayout = deficit > 0 ? deficit * currentTvaTier.value : 0; }
             }
             
+            // 5. Calculate QoS Payout/Deduction
             let qosPayout = 0;
             const currentQosTier = qosTiers.find(t => qosOverallPerc >= t.threshold);
             if(currentQosTier) {
-                if (currentQosTier.value >= 0) {
-                    qosPayout = (qosSpecificPerc / 100) * currentQosTier.value * achievedTva;
-                } else {
-                    const qualityDeficit = targetMain - ((qosOverallPerc / 100) * achievedTva);
-                    qosPayout = qualityDeficit > 0 ? currentQosTier.value * qualityDeficit : 0;
-                }
+                if (currentQosTier.value >= 0) { qosPayout = (qosSpecificPerc / 100) * currentQosTier.value * achievedTva; } 
+                else { const qualityDeficit = targetMain - ((qosOverallPerc / 100) * achievedTva); qosPayout = qualityDeficit > 0 ? currentQosTier.value * qualityDeficit : 0; }
             }
             
+            // 6. Calculate MNP Payout
             const targetMnpANum = Math.round((targetMnpAPerc / 100) * targetMain);
             const targetMnpBNum = Math.round((targetMnpBPerc / 100) * targetMain);
             const targetMnpCNum = Math.round((targetMnpCPerc / 100) * targetMain);
             
-            outputs.absTargetMnpA.textContent = targetMnpANum.toLocaleString();
-            outputs.absTargetMnpB.textContent = targetMnpBNum.toLocaleString();
-            outputs.absTargetMnpC.textContent = targetMnpCNum.toLocaleString();
-
             let mnpPayout = 0;
             let currentMnpSlab = 'None';
             if (tvaPercentage >= 100) {
-                if (achievedMnpAbs >= targetMnpCNum && targetMnpCNum > 0) {
-                    mnpPayout = achievedMnpAbs * 700;
-                    currentMnpSlab = 'C';
-                } else if (achievedMnpAbs >= targetMnpBNum && targetMnpBNum > 0) {
-                    mnpPayout = achievedMnpAbs * 500;
-                    currentMnpSlab = 'B';
-                } else if (achievedMnpAbs >= targetMnpANum && targetMnpANum > 0) {
-                    mnpPayout = achievedMnpAbs * 300;
-                    currentMnpSlab = 'A';
-                }
-                outputs.mnpMsg.classList.add('hidden');
-            } else {
-                outputs.mnpMsg.classList.remove('hidden');
-            }
+                if (achievedMnpAbs >= targetMnpCNum && targetMnpCNum > 0) { mnpPayout = achievedMnpAbs * 700; currentMnpSlab = 'C'; } 
+                else if (achievedMnpAbs >= targetMnpBNum && targetMnpBNum > 0) { mnpPayout = achievedMnpAbs * 500; currentMnpSlab = 'B'; } 
+                else if (achievedMnpAbs >= targetMnpANum && targetMnpANum > 0) { mnpPayout = achievedMnpAbs * 300; currentMnpSlab = 'A'; }
+            } 
             
-            updateMnpStatus(achievedMnpAbs, currentMnpSlab, {A: targetMnpANum, B: targetMnpBNum, C: targetMnpCNum}, tvaPercentage);
-
+            // 7. Calculate Net and Tax values
             const netPayout = mtsRentPayout + perSimPayout + tvaPayout + qosPayout + mnpPayout;
-
-            // Tax Calculations
-            let gstRate = 0.15;
-            let gstWithheldRate = 0.20;
-            if (province === 'punjab') {
-                gstRate = 0.16;
-                gstWithheldRate = 1.0;
-            } else if (province === 'kpk') {
-                gstWithheldRate = 0.50;
-            }
+            let gstRate = 0, gstWithheldRate = 0;
+            if (province === 'punjab') { gstRate = 0.16; gstWithheldRate = 1.0; } 
+            else if (province === 'kpk') { gstRate = 0.15; gstWithheldRate = 0.50; } 
+            else if (province === 'sindh' || province === 'balochistan') { gstRate = 0.15; gstWithheldRate = 0.20; }
 
             const gstAmount = netPayout * gstRate;
             const totalPayout = netPayout + gstAmount;
             const incomeTaxWithheld = totalPayout * 0.12;
             const gstWithheld = gstAmount * gstWithheldRate;
-            const amountCredited = totalPayout - incomeTaxWithheld - gstWithheld;
+            const gstPayable = gstAmount * (1 - gstWithheldRate);
             const pureEarning = netPayout - incomeTaxWithheld;
+            const finalCredited = totalPayout - incomeTaxWithheld - gstWithheld;
 
-            // Update UI
-            outputs.mtsRent.textContent = formatCurrency(mtsRentPayout);
-            outputs.perSim.textContent = formatCurrency(perSimPayout);
-            outputs.tva.textContent = formatCurrency(tvaPayout);
-            outputs.qos.textContent = formatCurrency(qosPayout);
-            outputs.mnp.textContent = formatCurrency(mnpPayout);
-            outputs.netPayout.textContent = formatCurrency(netPayout);
-            
-            outputs.labelGst.textContent = `GST (${(gstRate * 100).toFixed(0)}%)`;
-            outputs.gst.textContent = formatCurrency(gstAmount);
-            outputs.totalPayout.textContent = formatCurrency(totalPayout);
-            outputs.incomeTax.textContent = formatNegativeCurrency(incomeTaxWithheld);
-            outputs.labelGstWithheld.textContent = `GST Withheld (${(gstWithheldRate * 100).toFixed(0)}%)`;
-            outputs.gstWithheld.textContent = formatNegativeCurrency(gstWithheld);
-            outputs.finalCredited.textContent = formatCurrency(amountCredited);
-            outputs.pureEarning.textContent = formatCurrency(pureEarning);
-            
-            outputs.tva.className = `font-semibold ${tvaPayout >= 0 ? 'text-green-400' : 'text-red-400'}`;
-            outputs.qos.className = `font-semibold ${qosPayout >= 0 ? 'text-green-400' : 'text-red-400'}`;
-            
+            // 8. Update UI & Charts
+            updateUI(achievedTva, tvaPercentage, qosOverallPerc, qosSpecificPerc, achievedMnpAbs, currentMnpSlab, {A: targetMnpANum, B: targetMnpBNum, C: targetMnpCNum}, {
+                mtsRentPayout, perSimPayout, tvaPayout, qosPayout, mnpPayout, netPayout, gstRate, gstAmount, totalPayout, incomeTaxWithheld, gstWithheldRate, gstWithheld, gstPayable, finalCredited, pureEarning
+            });
+            updateChartHighlight(tvaChart, tvaTiers.indexOf(currentTvaTier));
+            updateChartHighlight(qosChart, qosTiers.indexOf(currentQosTier));
+            updateShoutout(pureEarning, achievedTva, achievedMnpAbs, qosOverallPerc);
+        }
+
+        // --- UI UPDATE FUNCTIONS ---
+        function updateUI(achievedTva, tvaPercentage, qosOverallPerc, qosSpecificPerc, achievedMnpAbs, currentMnpSlab, mnpTargets, payouts) {
+            outputs.mtsRent.textContent = formatCurrency(payouts.mtsRentPayout);
+            outputs.perSim.textContent = formatCurrency(payouts.perSimPayout);
+            outputs.tva.textContent = formatCurrency(payouts.tvaPayout);
+            outputs.qos.textContent = formatCurrency(payouts.qosPayout);
+            outputs.mnp.textContent = formatCurrency(payouts.mnpPayout);
+            outputs.netPayout.textContent = formatCurrency(payouts.netPayout);
+            outputs.gst.textContent = formatCurrency(payouts.gstAmount);
+            outputs.totalPayout.textContent = formatCurrency(payouts.totalPayout);
+            outputs.incomeTax.textContent = formatNegativeCurrency(payouts.incomeTaxWithheld);
+            outputs.gstWithheld.textContent = formatNegativeCurrency(payouts.gstWithheld);
+            outputs.gstPayable.textContent = formatCurrency(payouts.gstPayable);
+            outputs.finalCredited.textContent = formatCurrency(payouts.finalCredited);
+            outputs.pureEarning.textContent = formatCurrency(payouts.pureEarning);
+            outputs.tvaPerc.textContent = `${tvaPercentage.toFixed(0)}%`;
+            outputs.labelGst.textContent = `GST (${(payouts.gstRate * 100).toFixed(0)}%)`;
+            outputs.labelGstWithheld.textContent = `GST Withheld (${(payouts.gstWithheldRate * 100).toFixed(0)}%)`;
+            outputs.mnpMsg.classList.toggle('hidden', tvaPercentage >= 100);
+            outputs.tva.className = `font-semibold ${payouts.tvaPayout >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            outputs.qos.className = `font-semibold ${payouts.qosPayout >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            updateMnpStatus(achievedMnpAbs, currentMnpSlab, mnpTargets, tvaPercentage);
             absOutputs.totalActivations.textContent = achievedTva.toLocaleString();
             absOutputs.qosOverall.textContent = Math.round((qosOverallPerc / 100) * achievedTva).toLocaleString();
             absOutputs.qosSpecific.textContent = Math.round((qosSpecificPerc / 100) * achievedTva).toLocaleString();
             absOutputs.mnpAch.textContent = achievedMnpAbs.toLocaleString();
+            outputs.absTargetMnpA.textContent = mnpTargets.A.toLocaleString();
+            outputs.absTargetMnpB.textContent = mnpTargets.B.toLocaleString();
+            outputs.absTargetMnpC.textContent = mnpTargets.C.toLocaleString();
+        }
 
-            updateChartHighlight(tvaChart, tvaTiers.indexOf(currentTvaTier));
-            updateChartHighlight(qosChart, qosTiers.indexOf(currentQosTier));
+        function updateShoutout(pureEarning, activations, mnp, qos) {
+            if (activations > 0) {
+                 const perSimEarning = pureEarning / activations;
+                 outputs.shoutoutSection.innerHTML = `Dear partner: You can earn a total of <strong>${formatCurrency(pureEarning)}</strong> by doing sales of <strong>${activations}</strong> Activations with <strong>${mnp}</strong> MNP and getting <strong>${qos}%</strong> QoS. This refers to a per SIM payout of <strong>${formatCurrency(perSimEarning)}</strong>.`;
+            } else {
+                 outputs.shoutoutSection.innerHTML = `Enter your targets and achievements to see your potential earnings.`;
+            }
         }
 
         function updateMnpStatus(achieved, slab, targets, tvaPercentage) {
@@ -423,21 +536,14 @@
                 } else {
                     statusHtml = `You have achieved <strong>Slab ${slab}</strong>! `;
                     let nextSlab, nextTarget, nextPayoutRate, currentPayoutRate;
-                    if (slab === 'A') {
-                        nextSlab = 'B';
-                        nextTarget = targets.B;
-                        nextPayoutRate = 500;
-                        currentPayoutRate = 300;
-                    } else if (slab === 'B') {
-                        nextSlab = 'C';
-                        nextTarget = targets.C;
-                        nextPayoutRate = 700;
-                        currentPayoutRate = 500;
-                    }
+                    if (slab === 'A') { nextSlab = 'B'; nextTarget = targets.B; nextPayoutRate = 500; currentPayoutRate = 300; } 
+                    else if (slab === 'B') { nextSlab = 'C'; nextTarget = targets.C; nextPayoutRate = 700; currentPayoutRate = 500; }
                     
                     if (nextSlab && nextTarget > 0 && achieved < nextTarget) {
                         const deficit = nextTarget - achieved;
-                        const potentialExtra = (nextTarget * nextPayoutRate) - (achieved * currentPayoutRate);
+                        const currentPayout = achieved * currentPayoutRate;
+                        const nextPayout = nextTarget * nextPayoutRate;
+                        const potentialExtra = nextPayout - currentPayout;
                         statusHtml += `Achieve <strong>${deficit}</strong> more for Slab ${nextSlab} to earn an extra <strong>${formatCurrency(potentialExtra)}</strong>.`;
                     } else if (slab === 'C') {
                         statusHtml += `Congratulations, you've reached the top MNP slab!`;
@@ -447,10 +553,32 @@
             outputs.mnpStatusFeedback.innerHTML = statusHtml;
         }
 
+        function updateChartHighlight(chart, activeIndex) {
+            if (!chart || !chart.data) return;
+            chart.data.datasets.forEach(dataset => {
+                dataset.borderWidth = dataset.data.map((_, i) => i === activeIndex ? 3 : 1);
+                dataset.borderColor = dataset.data.map((_, i) => i === activeIndex ? 'var(--onic-purple)' : (dataset.data[i] >= 0 ? '#16a34a' : '#dc2626'));
+            });
+            chart.update();
+        }
+
+        // --- EVENT HANDLING & LOGIC ---
         function syncSliderAndInput(slider, numberInput, isQos) {
+            const tooltip = slider.previousElementSibling;
+            
+            function updateTooltip() {
+                const percent = (slider.value - slider.min) / (slider.max - slider.min);
+                const thumbWidth = 20;
+                const offset = (thumbWidth / 2) - (thumbWidth * percent);
+                tooltip.style.left = `calc(${percent * 100}% - ${offset}px)`;
+                tooltip.textContent = `${slider.value}%`;
+                tooltip.style.display = 'block';
+            }
+
             slider.addEventListener('input', (e) => {
                 numberInput.value = e.target.value;
                 if (isQos) enforceQosLogic(slider);
+                updateTooltip();
                 calculatePayout();
             });
             numberInput.addEventListener('input', (e) => {
@@ -461,51 +589,133 @@
                 e.target.value = value;
                 slider.value = value;
                 if (isQos) enforceQosLogic(numberInput);
+                updateTooltip();
                 calculatePayout();
             });
+            slider.addEventListener('mouseenter', updateTooltip);
+            slider.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
         }
         
         function enforceQosLogic(sourceElement) {
-            let overallSlider = inputs.achievedQosOverall;
-            let overallNum = inputs.achievedQosOverallNum;
-            let specificSlider = inputs.achievedQosSpecific;
-            let specificNum = inputs.achievedQosSpecificNum;
-            
+            let overallSlider = inputs.achievedQosOverall, specificSlider = inputs.achievedQosSpecific;
             if (sourceElement.id.includes('overall')) {
                 if (parseInt(overallSlider.value) < parseInt(specificSlider.value)) {
                     specificSlider.value = overallSlider.value;
-                    specificNum.value = overallSlider.value;
+                    inputs.achievedQosSpecificNum.value = overallSlider.value;
                 }
-            } else { // Source is specific
+            } else {
                 if (parseInt(specificSlider.value) > parseInt(overallSlider.value)) {
                     overallSlider.value = specificSlider.value;
-                    overallNum.value = specificSlider.value;
+                    inputs.achievedQosOverallNum.value = specificSlider.value;
                 }
             }
         }
+        
+        // --- WHAT-IF ANALYSIS ---
+        function whatIfCalculation(tvaPerc, qosPerc, mnpPayoutValue) {
+            const targetMain = parseInt(inputs.targetMain.value) || 0;
+            const province = inputs.province.value;
+            const achievedTva = Math.round((tvaPerc / 100) * targetMain);
+            let mtsRentPayout = achievedTva * 450, perSimPayout = achievedTva * 700;
+            let tvaPayout = 0;
+            const currentTvaTier = tvaTiers.find(t => tvaPerc >= t.threshold);
+            if (currentTvaTier) {
+                if (currentTvaTier.value >= 0) tvaPayout = currentTvaTier.value * achievedTva;
+                else { const deficit = targetMain - achievedTva; tvaPayout = deficit > 0 ? deficit * currentTvaTier.value : 0; }
+            }
+            let qosPayout = 0;
+            const currentQosTier = qosTiers.find(t => qosPerc >= t.threshold);
+            if(currentQosTier) {
+                if (currentQosTier.value >= 0) qosPayout = (qosPerc / 100) * currentQosTier.value * achievedTva;
+                else { const qualityDeficit = targetMain - ((qosPerc / 100) * achievedTva); qosPayout = qualityDeficit > 0 ? currentQosTier.value * qualityDeficit : 0; }
+            }
+            const netPayout = mtsRentPayout + perSimPayout + tvaPayout + qosPayout + mnpPayoutValue;
+            let gstRate = 0;
+            if (province === 'punjab') gstRate = 0.16;
+            else if (province) gstRate = 0.15;
+            const totalPayout = netPayout + (netPayout * gstRate);
+            const incomeTaxWithheld = totalPayout * 0.12;
+            return netPayout - incomeTaxWithheld;
+        }
+
+        function generateWhatIfTable(containerId, data, tvaRange, qosLevels) {
+            const container = document.getElementById(containerId);
+            if (!container || !data || data.length === 0) return;
+
+            let tableHTML = '<div class="overflow-x-auto relative mt-4"><table class="w-full text-sm text-left text-slate-500">';
+            tableHTML += '<thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0"><tr><th scope="col" class="px-2 py-3 bg-slate-200 z-10">TVA \\ QoS</th>';
+            qosLevels.forEach(qos => { tableHTML += `<th scope="col" class="px-2 py-3 text-center">${qos}%</th>`; });
+            tableHTML += '</tr></thead><tbody>';
+            tvaRange.forEach((tva, rowIndex) => {
+                tableHTML += `<tr class="bg-white border-b"><th scope="row" class="px-2 py-2 font-medium text-slate-900 whitespace-nowrap bg-slate-100 sticky left-0">${tva}%</th>`;
+                qosLevels.forEach((_, colIndex) => {
+                    const value = data[colIndex].y[rowIndex];
+                    tableHTML += `<td class="px-2 py-2 text-right">${formatCurrency(value)}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+            tableHTML += '</tbody></table></div>';
+            container.innerHTML = tableHTML;
+        }
+
+        function runWhatIfAnalysis() {
+            const tvaRange = [115, 110, 100, 90, 75, 50];
+            const qosLevels = [30, 40, 45, 50, 55, 60];
+            const targetMain = parseInt(inputs.targetMain.value) || 0;
+            if (targetMain === 0 || !inputs.province.value) return; 
+
+            const mnpTargets = {
+                A: Math.round((parseInt(inputs.targetMnpAPerc.value) / 100) * targetMain),
+                B: Math.round((parseInt(inputs.targetMnpBPerc.value) / 100) * targetMain),
+                C: Math.round((parseInt(inputs.targetMnpCPerc.value) / 100) * targetMain)
+            };
+            const mnpPayouts = { A: mnpTargets.A * 300, B: mnpTargets.B * 500, C: mnpTargets.C * 700 };
+
+            const plotDataA = qosLevels.map(qos => ({ x: tvaRange, y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.A : 0)), name: `QoS ${qos}%`, type: 'scatter', mode: 'lines' }));
+            const plotDataB = qosLevels.map(qos => ({ x: tvaRange, y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.B : 0)), name: `QoS ${qos}%`, type: 'scatter', mode: 'lines' }));
+            const plotDataC = qosLevels.map(qos => ({ x: tvaRange, y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.C : 0)), name: `QoS ${qos}%`, type: 'scatter', mode: 'lines' }));
+
+            const layout = {
+                xaxis: { title: 'TVA Achievement %', automargin: true, autorange: 'reversed' },
+                yaxis: { title: 'Pure Partner Earning (PKR)', automargin: true },
+                margin: { l: 80, r: 20, t: 20, b: 50 },
+                legend: { x: 0.01, y: 0.99, xanchor: 'left', yanchor: 'top' }
+            };
+
+            Plotly.newPlot('whatif-chart-a', plotDataA, layout, {responsive: true, displaylogo: false});
+            Plotly.newPlot('whatif-chart-b', plotDataB, layout, {responsive: true, displaylogo: false});
+            Plotly.newPlot('whatif-chart-c', plotDataC, layout, {responsive: true, displaylogo: false});
+
+            generateWhatIfTable('whatif-table-a', plotDataA, tvaRange, qosLevels);
+            generateWhatIfTable('whatif-table-b', plotDataB, tvaRange, qosLevels);
+            generateWhatIfTable('whatif-table-c', plotDataC, tvaRange, qosLevels);
+        }
+
+        // --- INITIALIZATION ---
+        inputs.province.addEventListener('change', () => {
+            provinceGate.classList.add('hidden');
+            mainContent.classList.remove('content-locked');
+            calculatePayout();
+            runWhatIfAnalysis();
+        });
 
         syncSliderAndInput(inputs.achievedTvaPerc, inputs.achievedTvaPercNum, false);
         syncSliderAndInput(inputs.achievedQosOverall, inputs.achievedQosOverallNum, true);
         syncSliderAndInput(inputs.achievedQosSpecific, inputs.achievedQosSpecificNum, true);
-
-        function updateChartHighlight(chart, activeIndex) {
-            chart.data.datasets.forEach(dataset => {
-                dataset.borderWidth = dataset.data.map((_, i) => i === activeIndex ? 3 : 1);
-                dataset.borderColor = dataset.data.map((_, i) => i === activeIndex ? 'var(--onic-purple)' : (dataset.data[i] >= 0 ? '#16a34a' : '#dc2626'));
-            });
-            chart.update();
-        }
         
         Object.values(inputs).forEach(input => {
-            if (!input.id.includes('perc-num') && !input.id.includes('range')) {
-                 input.addEventListener('input', calculatePayout);
-            }
+             if (input.id !== 'province') {
+                input.addEventListener('input', () => {
+                    calculatePayout();
+                    runWhatIfAnalysis();
+                });
+             }
         });
-
+        
         const chartOptions = {
             maintainAspectRatio: false, responsive: true,
-            scales: { y: { beginAtZero: true, ticks: { callback: value => `PKR ${value}` } }, x: { grid: { display: false } } },
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `Slab: ${formatCurrency(c.parsed.y)}` } } }
+            scales: { y: { beginAtZero: false, ticks: { callback: value => `PKR ${value}` } }, x: { grid: { display: false } } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `Payout/Penalty: ${formatCurrency(c.parsed.y)}` } } }
         };
 
         const tvaChart = new Chart(document.getElementById('tvaChart').getContext('2d'), {
@@ -520,7 +730,9 @@
             options: chartOptions
         });
 
-        window.addEventListener('load', calculatePayout);
+        // Initial call to set defaults correctly
+        calculatePayout();
+    });
     </script>
 </body>
 </html>
