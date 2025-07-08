@@ -5,18 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Business Partner Payout Calculator</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- 
-    Application Structure Plan: The application is designed as a task-oriented dashboard. The primary user task is to calculate potential earnings. The layout is a two-part grid: Inputs on the left, and Outputs on the right. This allows users to immediately see the result of their changes. Below this main tool, supplementary charts provide visual context for the commission tiers. This structure prioritizes the user's primary goal (calculation) while still offering the necessary explanatory details, making it highly efficient and user-friendly.
-    Visualization & Content Choices: 
-    - TVA & QoS Tiers: Bar charts (Chart.js) are used to visually distinguish bonus vs. deduction tiers. The active tier is highlighted based on slider input, creating a direct visual link between action and consequence.
-    - Payout Logic: An interactive calculator (HTML/JS) is the core of the app. It translates complex business rules into a simple, hands-on tool.
-    - MNP Payout: The output is dynamically shown or hidden based on the 100% target condition, clearly communicating this critical rule.
-    - What-If Analysis: Line charts (Plotly.js) and data tables are used to show the relationship between multiple variables (TVA%, QoS%, and Earnings), providing deeper strategic insights.
+    Application Structure Plan: The application is designed as a task-oriented dashboard. The primary user task is to calculate potential earnings. The layout is a two-part grid: Inputs on the left, and Outputs on the right. This allows users to immediately see the result of their changes. Below this main tool, a What-If analysis provides deeper strategic insights via data tables.
     -->
     <style>
         :root {
@@ -26,8 +19,6 @@
             --onic-light-gray: #f8f9fa;
         }
         body { font-family: 'Inter', sans-serif; background-color: var(--onic-light-gray); }
-        .chart-container { position: relative; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; }
-        @media (min-width: 768px) { .chart-container { height: 400px; } }
         .input-group { background-color: white; padding: 1.5rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
         .input-sync-group { position: relative; display: flex; align-items: center; gap: 1rem; }
         .input-sync-group input[type=range] { flex-grow: 1; }
@@ -262,26 +253,6 @@
                     </div>
                 </div>
             </main>
-
-            <!-- Visualizations Section -->
-            <section class="mt-12">
-                 <h2 class="text-2xl font-bold text-center mb-1" style="color: var(--onic-dark);">Commission Tier Visualizer</h2>
-                 <p class="text-slate-500 text-center mb-8">Your achievement level determines the payout slab. See how it works below.</p>
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                    <div class="bg-white rounded-xl shadow-lg p-6">
-                         <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">TVA Payout Slabs</h3>
-                        <div class="chart-container">
-                            <canvas id="tvaChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-lg p-6">
-                        <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">QoS Payout Slabs</h3>
-                        <div class="chart-container">
-                            <canvas id="qosChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </section>
             
             <!-- What If Analysis -->
             <section class="mt-12">
@@ -290,17 +261,14 @@
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="input-group">
                         <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">Analysis for MNP Slab A</h3>
-                        <div id="whatif-chart-a"></div>
                         <div id="whatif-table-a" class="mt-4"></div>
                     </div>
                     <div class="input-group">
                         <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">Analysis for MNP Slab B</h3>
-                        <div id="whatif-chart-b"></div>
                         <div id="whatif-table-b" class="mt-4"></div>
                     </div>
                     <div class="input-group">
                         <h3 class="text-lg font-semibold text-slate-700 mb-4 text-center">Analysis for MNP Slab C</h3>
-                        <div id="whatif-chart-c"></div>
                         <div id="whatif-table-c" class="mt-4"></div>
                     </div>
                 </div>
@@ -481,8 +449,6 @@
             updateUI(achievedTva, tvaPercentage, qosOverallPerc, qosSpecificPerc, achievedMnpAbs, currentMnpSlab, {A: targetMnpANum, B: targetMnpBNum, C: targetMnpCNum}, {
                 mtsRentPayout, perSimPayout, tvaPayout, qosPayout, mnpPayout, netPayout, gstRate, gstAmount, totalPayout, incomeTaxWithheld, gstWithheldRate, gstWithheld, gstPayable, finalCredited, pureEarning
             });
-            updateChartHighlight(tvaChart, tvaTiers.indexOf(currentTvaTier));
-            updateChartHighlight(qosChart, qosTiers.indexOf(currentQosTier));
             updateShoutout(pureEarning, achievedTva, achievedMnpAbs, qosOverallPerc);
         }
 
@@ -551,15 +517,6 @@
                 }
             }
             outputs.mnpStatusFeedback.innerHTML = statusHtml;
-        }
-
-        function updateChartHighlight(chart, activeIndex) {
-            if (!chart || !chart.data) return;
-            chart.data.datasets.forEach(dataset => {
-                dataset.borderWidth = dataset.data.map((_, i) => i === activeIndex ? 3 : 1);
-                dataset.borderColor = dataset.data.map((_, i) => i === activeIndex ? 'var(--onic-purple)' : (dataset.data[i] >= 0 ? '#16a34a' : '#dc2626'));
-            });
-            chart.update();
         }
 
         // --- EVENT HANDLING & LOGIC ---
@@ -640,7 +597,10 @@
 
         function generateWhatIfTable(containerId, data, tvaRange, qosLevels) {
             const container = document.getElementById(containerId);
-            if (!container || !data || data.length === 0) return;
+            if (!container || !data || data.length === 0) {
+                container.innerHTML = '<p class="text-center text-slate-500">Enter a main target to see analysis.</p>';
+                return;
+            }
 
             let tableHTML = '<div class="overflow-x-auto relative mt-4"><table class="w-full text-sm text-left text-slate-500">';
             tableHTML += '<thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0"><tr><th scope="col" class="px-2 py-3 bg-slate-200 z-10">TVA \\ QoS</th>';
@@ -662,7 +622,13 @@
             const tvaRange = [115, 110, 100, 90, 75, 50];
             const qosLevels = [30, 40, 45, 50, 55, 60];
             const targetMain = parseInt(inputs.targetMain.value) || 0;
-            if (targetMain === 0 || !inputs.province.value) return; 
+            if (targetMain === 0 || !inputs.province.value) {
+                // Clear tables if no target
+                generateWhatIfTable('whatif-table-a', [], [], []);
+                generateWhatIfTable('whatif-table-b', [], [], []);
+                generateWhatIfTable('whatif-table-c', [], [], []);
+                return;
+            }
 
             const mnpTargets = {
                 A: Math.round((parseInt(inputs.targetMnpAPerc.value) / 100) * targetMain),
@@ -671,24 +637,13 @@
             };
             const mnpPayouts = { A: mnpTargets.A * 300, B: mnpTargets.B * 500, C: mnpTargets.C * 700 };
 
-            const plotDataA = qosLevels.map(qos => ({ x: tvaRange, y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.A : 0)), name: `QoS ${qos}%`, type: 'scatter', mode: 'lines' }));
-            const plotDataB = qosLevels.map(qos => ({ x: tvaRange, y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.B : 0)), name: `QoS ${qos}%`, type: 'scatter', mode: 'lines' }));
-            const plotDataC = qosLevels.map(qos => ({ x: tvaRange, y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.C : 0)), name: `QoS ${qos}%`, type: 'scatter', mode: 'lines' }));
+            const tableDataA = qosLevels.map(qos => ({ y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.A : 0)) }));
+            const tableDataB = qosLevels.map(qos => ({ y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.B : 0)) }));
+            const tableDataC = qosLevels.map(qos => ({ y: tvaRange.map(tva => whatIfCalculation(tva, qos, tva >= 100 ? mnpPayouts.C : 0)) }));
 
-            const layout = {
-                xaxis: { title: 'TVA Achievement %', automargin: true, autorange: 'reversed' },
-                yaxis: { title: 'Pure Partner Earning (PKR)', automargin: true },
-                margin: { l: 80, r: 20, t: 20, b: 50 },
-                legend: { x: 0.01, y: 0.99, xanchor: 'left', yanchor: 'top' }
-            };
-
-            Plotly.newPlot('whatif-chart-a', plotDataA, layout, {responsive: true, displaylogo: false});
-            Plotly.newPlot('whatif-chart-b', plotDataB, layout, {responsive: true, displaylogo: false});
-            Plotly.newPlot('whatif-chart-c', plotDataC, layout, {responsive: true, displaylogo: false});
-
-            generateWhatIfTable('whatif-table-a', plotDataA, tvaRange, qosLevels);
-            generateWhatIfTable('whatif-table-b', plotDataB, tvaRange, qosLevels);
-            generateWhatIfTable('whatif-table-c', plotDataC, tvaRange, qosLevels);
+            generateWhatIfTable('whatif-table-a', tableDataA, tvaRange, qosLevels);
+            generateWhatIfTable('whatif-table-b', tableDataB, tvaRange, qosLevels);
+            generateWhatIfTable('whatif-table-c', tableDataC, tvaRange, qosLevels);
         }
 
         // --- INITIALIZATION ---
@@ -710,24 +665,6 @@
                     runWhatIfAnalysis();
                 });
              }
-        });
-        
-        const chartOptions = {
-            maintainAspectRatio: false, responsive: true,
-            scales: { y: { beginAtZero: false, ticks: { callback: value => `PKR ${value}` } }, x: { grid: { display: false } } },
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `Payout/Penalty: ${formatCurrency(c.parsed.y)}` } } }
-        };
-
-        const tvaChart = new Chart(document.getElementById('tvaChart').getContext('2d'), {
-            type: 'bar',
-            data: { labels: tvaTiers.map(t => t.label), datasets: [{ data: tvaTiers.map(t => t.value), backgroundColor: tvaTiers.map(t => t.value >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)'), borderWidth: 1, borderRadius: 4 }] },
-            options: chartOptions
-        });
-
-        const qosChart = new Chart(document.getElementById('qosChart').getContext('2d'), {
-            type: 'bar',
-            data: { labels: qosTiers.map(t => t.label), datasets: [{ data: qosTiers.map(t => t.value), backgroundColor: qosTiers.map(t => t.value >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)'), borderWidth: 1, borderRadius: 4 }] },
-            options: chartOptions
         });
 
         // Initial call to set defaults correctly
