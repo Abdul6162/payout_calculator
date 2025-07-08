@@ -192,7 +192,7 @@
                                 <span id="output-mts-rent" class="font-semibold">PKR 0</span>
                             </div>
                             <div class="flex justify-between items-center">
-                                <span class="text-slate-300">Activation Payout</span>
+                                <span class="text-slate-300">Per SIM Payout</span>
                                 <span id="output-per-sim" class="font-semibold">PKR 0</span>
                             </div>
                             <div class="flex justify-between items-center">
@@ -256,7 +256,7 @@
             
             <!-- What If Analysis -->
             <section class="mt-12">
-                <h2 class="text-2xl font-bold text-center mb-1" style="color: var(--onic-dark);">What-If Analysis: Earning Potential(After Tax) </h2>
+                <h2 class="text-2xl font-bold text-center mb-1" style="color: var(--onic-dark);">What-If Analysis: Earning Potential</h2>
                 <p class="text-slate-500 text-center mb-8">See how "Pure Partner Earning" changes with TVA and QoS achievements for each MNP slab.</p>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="input-group">
@@ -595,22 +595,54 @@
             return netPayout - incomeTaxWithheld;
         }
 
+        function getColorForValue(value, min, max) {
+            if (min === max) {
+                return { bgColor: 'rgb(199, 233, 192)', textColor: '#000' }; // Default color if all values are the same
+            }
+            const ratio = (value - min) / (max - min);
+
+            // Color scale: from light green to dark green
+            const startColor = { r: 229, g: 245, b: 229 }; // #e5f5e5
+            const endColor = { r: 0, g: 104, b: 55 };     // #006837
+
+            const r = Math.round(startColor.r + ratio * (endColor.r - startColor.r));
+            const g = Math.round(startColor.g + ratio * (endColor.g - startColor.g));
+            const b = Math.round(startColor.b + ratio * (endColor.b - startColor.b));
+
+            // Determine text color for readability based on background brightness
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            const textColor = brightness > 140 ? '#000000' : '#FFFFFF';
+
+            return { bgColor: `rgb(${r}, ${g}, ${b})`, textColor };
+        }
+
         function generateWhatIfTable(containerId, data, tvaRange, qosLevels) {
             const container = document.getElementById(containerId);
-            if (!container || !data || data.length === 0) {
+            if (!container || !data || data.length === 0 || data[0].y.length === 0) {
                 container.innerHTML = '<p class="text-center text-slate-500">Enter a main target to see analysis.</p>';
                 return;
             }
+
+            // Find min and max values in the dataset for this specific table to create the color scale
+            let minVal = Infinity;
+            let maxVal = -Infinity;
+            data.forEach(col => {
+                col.y.forEach(val => {
+                    if (val < minVal) minVal = val;
+                    if (val > maxVal) maxVal = val;
+                });
+            });
 
             let tableHTML = '<div class="overflow-x-auto relative mt-4"><table class="w-full text-sm text-left text-slate-500">';
             tableHTML += '<thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0"><tr><th scope="col" class="px-2 py-3 bg-slate-200 z-10">TVA \\ QoS</th>';
             qosLevels.forEach(qos => { tableHTML += `<th scope="col" class="px-2 py-3 text-center">${qos}%</th>`; });
             tableHTML += '</tr></thead><tbody>';
             tvaRange.forEach((tva, rowIndex) => {
-                tableHTML += `<tr class="bg-white border-b"><th scope="row" class="px-2 py-2 font-medium text-slate-900 whitespace-nowrap bg-slate-100 sticky left-0">${tva}%</th>`;
+                tableHTML += `<tr class="border-b"><th scope="row" class="px-2 py-2 font-medium text-slate-900 whitespace-nowrap bg-slate-100 sticky left-0">${tva}%</th>`;
                 qosLevels.forEach((_, colIndex) => {
                     const value = data[colIndex].y[rowIndex];
-                    tableHTML += `<td class="px-2 py-2 text-right">${formatCurrency(value)}</td>`;
+                    const { bgColor, textColor } = getColorForValue(value, minVal, maxVal);
+                    tableHTML += `<td class="px-2 py-2 text-right font-medium" style="background-color: ${bgColor}; color: ${textColor};">${formatCurrency(value)}</td>`;
                 });
                 tableHTML += '</tr>';
             });
